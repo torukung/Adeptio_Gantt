@@ -9,17 +9,21 @@ binding = "DB"
 database_name = "adeptio-gantt"
 database_id = "4dbdec99-fdea-411a-b4fa-d8ea3597315e"
 
-# --- Scheduled backups ---
-# Daily 18:00 UTC (01:00 Bangkok) and weekly Sunday 18:30 UTC.
-# The Worker treats the Sunday schedule as the "weekly" snapshot.
-[triggers]
-crons = ["0 18 * * *", "30 18 * * 0"]
+# --- Scheduled backups (Cron Triggers) ---
+# NOTE: the Workers Builds token can't register cron schedules, so these are
+# NOT declared here (that would make every Git build fail on the schedules step).
+# Add them once in the dashboard instead — they persist across deploys:
+#   Worker > Settings > Triggers > Cron Triggers > Add Cron Trigger
+#     0 18 * * *     daily   (18:00 UTC / 01:00 Bangkok)
+#     30 18 * * 0    weekly  (Sunday 18:30 UTC)
+# The deployed scheduled() handler runs on these and labels the Sunday run
+# "weekly" by matching WEEKLY_CRON below.
 
 # Non-secret var so scheduled() can label the weekly run explicitly.
 [vars]
 WEEKLY_CRON = "30 18 * * 0"
 
-# --- Secrets (set with `npx wrangler secret put <NAME>`; never commit them) ---
+# --- Secrets (set in the dashboard: Settings > Variables and secrets; never commit) ---
 #   API_TOKEN                 shared bearer token (must match API_TOKEN in app.js)
 #   Dropbox (simplest):
 #     DROPBOX_TOKEN           a Dropbox access token
