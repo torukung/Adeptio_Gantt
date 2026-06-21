@@ -1,3 +1,5 @@
+const API_BASE  = "https://adeptio-gantt.pathom-bot.workers.dev";
+const API_TOKEN = "the-exact-same-token";
 "use strict";
 /* ============================================================================
    ADEPTIO PROJECT TRACKING — Blueprint v2.2 (vanilla JS SPA)
