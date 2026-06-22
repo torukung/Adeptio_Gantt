@@ -3,11 +3,10 @@
 All notable changes to the blueprint are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); dates in CE.
 
-> **Two kinds of "log of change" in this project**
-> 1. **This file** — human-written history of blueprint releases (design/feature level).
-> 2. **`audit_log` table** (see `db/schema.sql`) — automatic, per-action runtime log
->    (create/update/delete/reorder of any project, module, feature, column, or
->    summary) written by the API. Read it via `GET /api/audit?project=<id>`.
+> This file is a human-written history of blueprint releases (design/feature level).
+> There is no automatic per-action audit log — the Worker persists the whole app
+> document in D1 and keeps rolling snapshots in the `backups` table (see
+> `schema.sql` / `worker.js`).
 
 ---
 
