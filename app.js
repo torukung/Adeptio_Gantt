@@ -12,7 +12,7 @@
    drag-reorder) · status column · add/delete + drag-reorder columns ·
    drag-reorder rows · resizable column pane · module-create modal · scroll
    toolbar · Excel/PNG. Local store (localStorage w/ safe fallback); PROD
-   swaps Store -> Turso API.
+   swaps the local Store for the Cloudflare Worker + D1 API.
    ========================================================================== */
 
 /* ---------- palette / statuses (brand-derived) ---------- */
@@ -42,7 +42,7 @@ const nid = () => "id_" + Math.random().toString(36).slice(2,8) + (_seq++);
 const DAY = 86400000;
 const TH_MON = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
 const EN_MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function parse(s){ if(s instanceof Date) return new Date(s.getFullYear(),s.getMonth(),s.getDate()); const [y,m,d]=String(s).split("-").map(Number); return new Date(y,(m||1)-1,d||1); }
+function parse(s){ if(s instanceof Date) return new Date(s.getFullYear(),s.getMonth(),s.getDate()); const [y,m,d]=String(s).split("-").map(Number); const dt=new Date(y,(m||1)-1,d||1); return isNaN(dt)?today():dt; } // guard against malformed dates (e.g. corrupt restored JSON) propagating NaN
 function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function daysBetween(a,b){ return Math.round((parse(b)-parse(a))/DAY); }
@@ -269,13 +269,10 @@ function barSeg(s){ return `<span class="bseg done" style="width:${s.donePct}%">
 /* =====================  ROUTING  ===================== */
 let PID = null;
 function readRoute(){
+  // The app navigates purely via hash URLs (e.g. #project=<id>&view=history).
   const hash = location.hash.replace(/^#/,"");
   const hp = new URLSearchParams(hash.includes("=")?hash:"");
-  const url = new URL(location.href);
-  const pathM = location.pathname.match(/\/p\/([^/?#]+)/);
-  const pid = url.searchParams.get("project") || hp.get("project") || (pathM?pathM[1]:null);
-  const view = url.searchParams.get("view") || hp.get("view") || null;
-  return { pid, view };
+  return { pid: hp.get("project"), view: hp.get("view") };
 }
 function projectUrl(id, view){ return location.pathname + "#project=" + id + (view?("&view="+view):""); }
 function openProjectWindow(id){
@@ -661,7 +658,7 @@ function showHistory(){
     const del=it.querySelector('[data-act="delhist"]');
     if(del) del.onclick=()=>{ P.summary.history=P.summary.history.filter(x=>x.id!==it.dataset.id); Store.save(); showHistory(); };
   });
-  el("histAdd").onclick=()=>{ P.summary.history.push({id:nid(), date:iso(today()), text:""}); Store.save(); showHistory(); };
+  el("histAdd").onclick=()=>{ P.summary.history.unshift({id:nid(), date:iso(today()), text:""}); Store.save(); showHistory(); }; // newest-first, consistent with "＋ อัปเดตใหม่"
   el("histClose").onclick=()=>{ location.hash="project="+PID; };
 }
 function hideHistory(){ const h=el("historyOverlay"); if(h){ h.style.display="none"; h.innerHTML=""; } }
@@ -733,7 +730,8 @@ function renderGrid(){
               <span class="txt" contenteditable="true" data-field="name" spellcheck="false" data-ph="ตั้งชื่อฟีเจอร์…">${f.fid?`<span class="fid">${esc(f.fid)}</span>`:""}${esc(f.name)}</span>
               <span class="rowActs"><button class="iconbtn" data-act="up" title="เลื่อนขึ้น">${IC.up}</button><button class="iconbtn" data-act="down" title="เลื่อนลง">${IC.down}</button><button class="iconbtn danger" data-act="delfeat" title="ลบฟีเจอร์">${IC.trash}</button></span></div>`;
           } else if(c.kind==="date"){
-            html += `<div class="cell" style="width:${c.w}px"><input type="date" value="${f[c.key]||""}" data-mi="${mi}" data-fi="${fi}" data-field="${c.key}" /></div>`;
+            const dval=c.custom?(f.custom[c.custom]||""):(f[c.key]||"");
+            html += `<div class="cell" style="width:${c.w}px"><input type="date" value="${dval}" data-mi="${mi}" data-fi="${fi}" data-field="${c.key}" /></div>`;
           } else if(c.kind==="status"){
             const st=stById(f.status);
             const opts=STATUS.map(s=>`<option value="${s.id}" ${s.id===f.status?'selected':''}>${s.th}</option>`).join("");
@@ -826,6 +824,7 @@ function onTextBlur(e){
 }
 function onDateChange(e){
   const inp=e.target, P=proj(), f=P.modules[+inp.dataset.mi].features[+inp.dataset.fi], field=inp.dataset.field, v=inp.value;
+  if(field.startsWith("c:")){ const cid=field.slice(2); if(!v){ inp.value=f.custom[cid]||""; return; } f.custom[cid]=v; Store.save(); return; } // custom date column → store on f.custom, independent of the feature's schedule
   if(!v){ inp.value=f[field]; return; }
   if(field==="start"){ f.start=v; if(parse(f.end)<parse(v)) f.end=v; } else { f.end=v; if(parse(v)<parse(f.start)) f.start=v; }
   Store.save(); renderTimeline();
