@@ -347,3 +347,46 @@ button{font-family:inherit; cursor:pointer;}
 .bkMeta{font-size:12px; color:var(--ink-soft);}
 .bkMeta b{font-family:var(--mono); font-size:10.5px; letter-spacing:.04em; text-transform:uppercase; color:var(--violet-adpt);}
 .bkEmpty{font-size:12px; color:var(--ink-faint); padding:9px 2px;}
+
+/* ===== รายละเอียด external-link button ===== */
+.detailsWrap{display:inline-flex; align-items:center; gap:2px;}
+.btn.details.gray{color:var(--ink-faint); border-color:var(--line-strong); background:#f4f4f8;}
+.btn.details.gray:hover{color:var(--violet-adpt); border-color:var(--violet-adpt); background:#fff;}
+.detailsEdit{width:30px; height:30px;}
+.btn.danger{color:var(--ruby-adpt); border-color:#f3c2cf; background:#fff;}
+.btn.danger:hover{background:#fff0f4; border-color:var(--ruby-adpt);}
+
+/* ===== modal: two-up fields + select/date ===== */
+.field2{display:flex; gap:12px;}
+.field2 .field{flex:1 1 0; min-width:0;}
+.field select{width:100%; height:38px; border:1px solid var(--line-strong); border-radius:var(--r-sm); padding:0 10px; font-family:inherit; font-size:13px; color:var(--ink); background:#fff; color-scheme:light;}
+.field input[type=date]{color-scheme:light;}
+
+/* ===== KPI progress table (Status & Summary) ===== */
+.kpiTableWrap{margin-top:6px; overflow-x:auto;}
+.kpiTable{min-width:900px; display:flex; flex-direction:column; gap:1px;}
+.kpiRow{display:grid; grid-template-columns:200px minmax(118px,1.05fr) 74px 74px 130px minmax(118px,1.2fr) minmax(96px,1fr) 26px; align-items:center; gap:8px; padding:5px 4px; border-radius:var(--r-sm);}
+.kpiRow.progRow:hover{background:#faf7ff;}
+.kpiHead{font-family:var(--mono); font-size:9.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--ink-faint); padding:2px 4px 5px; border-bottom:1px solid var(--line); border-radius:0;}
+.kpiHead:hover{background:transparent;}
+.kc{min-width:0; display:flex; align-items:center; gap:6px;}
+.kc-name{gap:4px;}
+.kc-name .pmName{flex:1 1 auto; width:auto; font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.kc-bar .pbar{flex:1 1 auto;}
+.kc-auto{font-size:10px; color:var(--ink-faint); min-width:30px; text-align:right;}
+.kc-num{justify-content:flex-end;}
+.kpiNum{width:58px; text-align:right; font-family:var(--mono); font-size:11.5px; border:1px solid var(--line-strong); border-radius:var(--r-xs); padding:4px 6px; background:#fff; color:var(--ink);}
+.kc-detail .kpiText, .kc-remark .kpiText{width:100%; font-size:11.5px; border:1px solid var(--line-strong); border-radius:var(--r-xs); padding:4px 7px; background:#fff; color:var(--ink);}
+.kpiNum:focus,.kpiText:focus,.kpiSel:focus{outline:none; border-color:var(--violet-adpt); box-shadow:0 0 0 2px rgba(146,65,255,.15);}
+.kc-state{flex-direction:column; align-items:stretch; gap:3px;}
+.kpiBadge{font-size:10px; font-weight:700; padding:2px 7px; border-radius:var(--r-pill); text-align:center; white-space:nowrap;}
+.kpiBadge.k-none{background:#ececf1; color:#8a8a96;}
+.kpiBadge.k-ontrack{background:#dbf6ea; color:#0a8a55;}
+.kpiBadge.k-delay{background:#fff0d6; color:#b9770a;}
+.kpiBadge.k-block{background:#ffe0e8; color:#c2274d;}
+.kpiBadge.k-done{background:#e0eeff; color:#1f6fd0;}
+.kpiSel{font-size:10.5px; border:1px solid var(--line-strong); border-radius:var(--r-xs); padding:2px 4px; background:#fff; color:var(--ink-soft); color-scheme:light;}
+.kc-x{justify-content:center;}
+.kc-x .pmDel{width:22px; height:22px; border:1px solid transparent; background:transparent; border-radius:7px; display:flex; align-items:center; justify-content:center; color:var(--ink-faint); cursor:pointer;}
+.kc-x .pmDel:hover{color:var(--ruby-adpt); border-color:#f3c2cf;}
+@media (max-width:680px){ .kpiHead{display:none;} }

@@ -77,6 +77,7 @@ const IC = {
   arrow: ic('<path d="M5 12h14M13 6l6 6-6 6"/>'),
   cloud: ic('<path d="M7 18a4 4 0 01-.5-7.97 5.5 5.5 0 0110.55-1.3A4 4 0 0117.5 18H7z"/>'),
   restore: ic('<path d="M3 12a9 9 0 109-9 9 9 0 00-7 3.3M3 4v3.5h3.5"/><path d="M12 8v4l3 2"/>'),
+  link:  ic('<path d="M9 15l6-6M10.5 6.5l1-1a4 4 0 015.95 5.3l-1.2 1.2M13.5 17.5l-1 1a4 4 0 01-5.95-5.3l1.2-1.2"/>'),
 };
 
 /* =====================  STORE (local-first, optional cloud sync)  ===== */
@@ -265,6 +266,26 @@ function normalizeProgressOrder(P){
 }
 function progressModules(P){ return normalizeProgressOrder(P).map(id=>P.modules.find(m=>m.id===id)).filter(m=>m && !m.hideProgress); }
 function barSeg(s){ return `<span class="bseg done" style="width:${s.donePct}%"></span><span class="bseg prog" style="width:${s.startedPct}%"></span>`; }
+/* ----- per-module KPI: target vs actual + status detail/remark ----- */
+function kpiOf(m){ if(!m.kpi||typeof m.kpi!=="object"){ m.kpi={target:null,actual:null,state:"auto",detail:"",remark:""}; } return m.kpi; }
+function kpiState(m,s){
+  const k=kpiOf(m); s=s||moduleStats(m);
+  const eff=(k.actual==null?s.donePct:k.actual);
+  let key=k.state;
+  if(!key||key==="auto"){ if(k.target==null) key="none"; else if(eff>=100) key="done"; else if(eff>=k.target) key="ontrack"; else key="delay"; }
+  const MAP={none:{cls:"k-none",label:"—"},ontrack:{cls:"k-ontrack",label:"ตามแผน"},delay:{cls:"k-delay",label:"ล่าช้า"},block:{cls:"k-block",label:"ติดปัญหา"},done:{cls:"k-done",label:"เสร็จ"}};
+  return MAP[key]||MAP.none;
+}
+function onKpiChange(e){
+  const inp=e.target, P=proj(), m=P.modules.find(x=>x.id===inp.dataset.mid); if(!m) return;
+  const k=kpiOf(m), f=inp.dataset.f;
+  if(f==="target"||f==="actual"){ const v=inp.value.trim(); if(v===""){ k[f]=null; } else { let n=Math.round(+v); if(isNaN(n)){ k[f]=null; inp.value=""; } else { n=Math.max(0,Math.min(100,n)); k[f]=n; inp.value=n; } } }
+  else if(f==="state"){ k.state=inp.value; }
+  else { k[f]=inp.value; }
+  Store.save();
+  const s=moduleStats(m), st=kpiState(m,s), badge=document.querySelector(`.kpiBadge[data-badge="${m.id}"]`);
+  if(badge){ badge.className="kpiBadge "+st.cls; badge.textContent=st.label; }
+}
 
 /* =====================  ROUTING  ===================== */
 let PID = null;
@@ -417,6 +438,12 @@ function renderProject(){
         <button class="btn sm" id="btnToday">Today</button>
       </div>
       <div class="toolgroup">
+        <span class="detailsWrap">
+          <button class="btn sm details${P.detailsUrl?'':' gray'}" id="btnDetails" title="${P.detailsUrl?esc(P.detailsUrl):'ยังไม่ได้ตั้งค่า URL — คลิกเพื่อเพิ่มลิงก์'}">${IC.link}<span>รายละเอียด</span></button>
+          <button class="iconbtn detailsEdit" id="btnDetailsEdit" title="แก้ไข / ตั้งค่า URL">${IC.edit}</button>
+        </span>
+      </div>
+      <div class="toolgroup">
         <button class="btn sm" id="btnImport">${IC.imp}<span>Import</span></button>
         <button class="btn sm" id="btnExportXlsx">${IC.exp}<span>Export</span></button>
       </div>
@@ -497,6 +524,8 @@ function wireProjectControls(){
   el("btnExportXlsx").onclick = exportXlsx;
   el("btnExportPng").onclick = exportPng;
   el("btnPrint").onclick = ()=> window.print();
+  const bd=el("btnDetails"); if(bd) bd.onclick=()=>{ const P=proj(); if(P.detailsUrl) window.open(P.detailsUrl,"_blank","noopener"); else detailsModal(); };
+  const bde=el("btnDetailsEdit"); if(bde) bde.onclick=()=> detailsModal();
 }
 
 /* ----- vertical splitter: resize the column pane ----- */
@@ -579,17 +608,31 @@ function renderProgress(){
       </div>
     </div>`;
   if(mods.length){
-    html+=`<div class="progModules">`+ mods.map(m=>{
-      const s=moduleStats(m);
+    const head=`<div class="kpiRow kpiHead">
+      <span class="kc kc-name">โมดูล</span>
+      <span class="kc kc-bar">ความคืบหน้า (อัตโนมัติ)</span>
+      <span class="kc kc-num">เป้าหมาย&nbsp;%</span>
+      <span class="kc kc-num">จริง&nbsp;%</span>
+      <span class="kc kc-state">สถานะ</span>
+      <span class="kc kc-detail">รายละเอียดสถานะ</span>
+      <span class="kc kc-remark">หมายเหตุ</span>
+      <span class="kc kc-x"></span>
+    </div>`;
+    const rows=mods.map(m=>{
+      const s=moduleStats(m), k=kpiOf(m), st=kpiState(m,s);
       const tip=`เสร็จ ${s.donePct}% · กำลังทำ ${s.startedPct}% · ยังไม่เริ่ม ${s.notPct}% (${s.total} งาน)`;
-      return `<div class="progRow" data-mid="${m.id}">
-        <span class="pgrip" data-act="progdrag" title="ลากเพื่อจัดลำดับการแสดงผล">${IC.grip}</span>
-        <span class="pmName" title="${esc(m.name)}">${esc(m.name)}</span>
-        <span class="pbar" title="${tip}">${barSeg(s)}</span>
-        <span class="pmPct" title="${tip}">${s.donePct}% · ${s.startedPct}%</span>
-        <button class="pmDel" data-act="proghide" data-mid="${m.id}" title="ซ่อนกราฟโมดูลนี้">${IC.x}</button>
+      return `<div class="kpiRow progRow" data-mid="${m.id}">
+        <span class="kc kc-name"><span class="pgrip" data-act="progdrag" title="ลากเพื่อจัดลำดับการแสดงผล">${IC.grip}</span><span class="pmName" title="${esc(m.name)}">${esc(m.name)}</span></span>
+        <span class="kc kc-bar"><span class="pbar" title="${tip}">${barSeg(s)}</span><span class="kc-auto mono" title="${tip}">${s.donePct}%</span></span>
+        <span class="kc kc-num"><input type="number" class="kpiNum" min="0" max="100" step="5" data-f="target" data-mid="${m.id}" value="${k.target==null?'':k.target}" placeholder="—"/></span>
+        <span class="kc kc-num"><input type="number" class="kpiNum" min="0" max="100" step="5" data-f="actual" data-mid="${m.id}" value="${k.actual==null?'':k.actual}" placeholder="${s.donePct}"/></span>
+        <span class="kc kc-state"><span class="kpiBadge ${st.cls}" data-badge="${m.id}">${st.label}</span><select class="kpiSel" data-f="state" data-mid="${m.id}"><option value="auto" ${k.state==='auto'?'selected':''}>อัตโนมัติ</option><option value="ontrack" ${k.state==='ontrack'?'selected':''}>ตามแผน</option><option value="delay" ${k.state==='delay'?'selected':''}>ล่าช้า</option><option value="block" ${k.state==='block'?'selected':''}>ติดปัญหา</option><option value="done" ${k.state==='done'?'selected':''}>เสร็จ</option></select></span>
+        <span class="kc kc-detail"><input type="text" class="kpiText" data-f="detail" data-mid="${m.id}" value="${esc(k.detail||'')}" placeholder="รายละเอียดสถานะ…"/></span>
+        <span class="kc kc-remark"><input type="text" class="kpiText" data-f="remark" data-mid="${m.id}" value="${esc(k.remark||'')}" placeholder="หมายเหตุ…"/></span>
+        <span class="kc kc-x"><button class="pmDel" data-act="proghide" data-mid="${m.id}" title="ซ่อนโมดูลนี้">${IC.x}</button></span>
       </div>`;
-    }).join("")+`</div>`;
+    }).join("");
+    html+=`<div class="kpiTableWrap"><div class="kpiTable">${head}${rows}</div></div>`;
   } else {
     html+=`<div class="progEmpty">ไม่มีโมดูลที่แสดง — ${hidden.length?"กดด้านล่างเพื่อแสดงอีกครั้ง":"เพิ่มโมดูลเพื่อดูความคืบหน้า"}</div>`;
   }
@@ -600,6 +643,7 @@ function renderProgress(){
   box.querySelectorAll('[data-act="proghide"]').forEach(b=> b.onclick=()=>{ const m=P.modules.find(x=>x.id===b.dataset.mid); if(m){ m.hideProgress=true; Store.save(); renderProgress(); } });
   box.querySelectorAll('[data-act="progshow"]').forEach(b=> b.onclick=()=>{ const m=P.modules.find(x=>x.id===b.dataset.mid); if(m){ m.hideProgress=false; Store.save(); renderProgress(); } });
   box.querySelectorAll('.pgrip[data-act="progdrag"]').forEach(g=> g.addEventListener('pointerdown', onProgDragStart));
+  box.querySelectorAll('.kpiNum,.kpiText,.kpiSel').forEach(inp=> inp.addEventListener('change', onKpiChange));
 }
 
 /* progress reorder (drag) */
@@ -838,11 +882,11 @@ function onStatusChange(e){
 function onGridAction(e){
   const b=e.currentTarget, act=b.dataset.act, P=proj();
   if(act==="delcol"){ const cid=b.dataset.col; if(confirm("ลบคอลัมน์นี้และข้อมูลในคอลัมน์?")){ P.customCols=P.customCols.filter(c=>c.id!==cid); P.modules.forEach(m=>m.features.forEach(f=>{ delete f.custom[cid]; })); Store.save(); renderBoard(); } return; }
+  if(act==="addfeat"){ const mEl=b.closest('.modRow'); const mi=(b.dataset.mi!=null)?+b.dataset.mi:(mEl?+mEl.dataset.mi:-1); if(mi>=0) featureModal(mi); return; }
   const modEl=b.closest('.modRow');
-  if(modEl && (act==="toggle"||act==="addfeat"||act==="delmod"||act==="editmod")){
+  if(modEl && (act==="toggle"||act==="delmod"||act==="editmod")){
     const mi=+modEl.dataset.mi;
     if(act==="toggle"){ P.modules[mi].collapsed=!P.modules[mi].collapsed; Store.save(); renderBoard(); return; }
-    if(act==="addfeat"){ addFeature(mi); return; }
     if(act==="editmod"){ moduleModal(mi); return; }
     if(act==="delmod"){ if(confirm(`ลบโมดูล “${P.modules[mi].name}” และฟีเจอร์ทั้งหมด?`)){ P.modules.splice(mi,1); Store.save(); renderBoard(); } return; }
   }
@@ -857,6 +901,38 @@ function addFeature(mi){
   P.modules[mi].features.push({id:nid(),fid:"",name:"ฟีเจอร์ใหม่",description:"",start:iso(t),end:iso(addDays(t,7)),status:"not_started",remark:"",custom:{}});
   P.modules[mi].collapsed=false; Store.save(); renderBoard();
   const rows=el("leftBody").querySelectorAll(`.featRow[data-mi="${mi}"]`); const last=rows[rows.length-1]; if(last){ const tx=last.querySelector('.txt'); tx&&tx.focus(); }
+}
+
+/* feature modal — fill in details when adding (or editing) a feature */
+function featureModal(mi, fi){
+  const P=proj(), M=P.modules[mi]; if(!M) return;
+  const editing=(fi!=null)?M.features[fi]:null, t=today();
+  const f = editing || {fid:"",name:"",description:"",start:iso(t),end:iso(addDays(t,7)),status:"not_started",remark:""};
+  const opts=STATUS.map(s=>`<option value="${s.id}" ${s.id===f.status?'selected':''}>${esc(s.th)}</option>`).join("");
+  openModal(`
+    <h2>${editing?"แก้ไขฟีเจอร์":"เพิ่มฟีเจอร์"}</h2>
+    <div class="msub">โมดูล: ${esc(M.name)}</div>
+    <div class="field2">
+      <div class="field"><label>รหัส · ID</label><input type="text" id="fm_fid" value="${esc(f.fid||"")}" placeholder="เช่น PRO-PR-01"/></div>
+      <div class="field"><label>สถานะ · Status</label><select id="fm_status">${opts}</select></div>
+    </div>
+    <div class="field"><label>ชื่อฟีเจอร์ · Feature name</label><input type="text" id="fm_name" value="${esc(f.name||"")}" placeholder="ตั้งชื่อฟีเจอร์…"/></div>
+    <div class="field"><label>คำอธิบาย · Description</label><textarea id="fm_desc" placeholder="อธิบายสั้น ๆ (ไม่บังคับ)">${esc(f.description||"")}</textarea></div>
+    <div class="field2">
+      <div class="field"><label>วันเริ่ม · Start</label><input type="date" id="fm_start" value="${f.start||iso(t)}"/></div>
+      <div class="field"><label>วันสิ้นสุด · End</label><input type="date" id="fm_end" value="${f.end||iso(addDays(t,7))}"/></div>
+    </div>
+    <div class="field"><label>หมายเหตุ · Remark</label><input type="text" id="fm_remark" value="${esc(f.remark||"")}" placeholder="หมายเหตุ (ไม่บังคับ)"/></div>
+    <div class="modActsRow"><button class="btn" data-act="cancel">ยกเลิก</button><button class="btn primary" id="fm_save">${editing?"บันทึก":"เพิ่มฟีเจอร์"}</button></div>`);
+  el("fm_name").focus();
+  el("fm_save").onclick=()=>{
+    const name=el("fm_name").value.trim()||"ฟีเจอร์ใหม่";
+    let s=el("fm_start").value||iso(t), e=el("fm_end").value||s; if(parse(e)<parse(s)) e=s;
+    const data={ fid:el("fm_fid").value.trim(), name, description:el("fm_desc").value.trim(), start:s, end:e, status:el("fm_status").value, remark:el("fm_remark").value.trim() };
+    if(editing){ Object.assign(editing, data); }
+    else { M.features.push({ id:nid(), ...data, custom:{} }); M.collapsed=false; }
+    Store.save(); closeModal(); renderBoard(); toast(editing?"บันทึกฟีเจอร์แล้ว":"เพิ่มฟีเจอร์แล้ว");
+  };
 }
 
 /* module modal (with short description) */
@@ -891,6 +967,20 @@ function columnModal(){
     <div class="modActsRow"><button class="btn" data-act="cancel">ยกเลิก</button><button class="btn primary" id="cm_save">เพิ่มคอลัมน์</button></div>`);
   el("cm_kind").querySelectorAll('button').forEach(b=> b.onclick=()=>{ kind=b.dataset.k; el("cm_kind").querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); });
   el("cm_save").onclick=()=>{ const label=el("cm_name").value.trim(); if(!label){ toast("กรุณาใส่ชื่อคอลัมน์"); return; } P.customCols.push({id:"c"+(_seq++),label,w:150,kind}); Store.save(); renderBoard(); closeModal(); toast("เพิ่มคอลัมน์แล้ว"); };
+}
+
+/* details external link (รายละเอียด) */
+function refreshDetailsBtn(){ const b=el("btnDetails"); if(!b) return; const P=proj(); const has=!!(P&&P.detailsUrl); b.classList.toggle('gray', !has); b.title=has?P.detailsUrl:'ยังไม่ได้ตั้งค่า URL — คลิกเพื่อเพิ่มลิงก์'; }
+function detailsModal(){
+  const P=proj();
+  openModal(`
+    <h2>รายละเอียด · ลิงก์ภายนอก</h2>
+    <div class="msub">ลิงก์ออกไปยังเอกสาร/ระบบภายนอก เช่น BRD, Google Drive, Figma — เปิดในแท็บใหม่</div>
+    <div class="field"><label>URL</label><input type="url" id="du_url" value="${esc(P.detailsUrl||"")}" placeholder="https://…"/></div>
+    <div class="modActsRow">${P.detailsUrl?`<button class="btn danger" id="du_clear">ลบลิงก์</button>`:""}<span class="grow"></span><button class="btn" data-act="cancel">ยกเลิก</button><button class="btn primary" id="du_save">บันทึก</button></div>`);
+  el("du_url").focus();
+  el("du_save").onclick=()=>{ let u=el("du_url").value.trim(); if(u&&!/^https?:\/\//i.test(u)) u="https://"+u; P.detailsUrl=u; Store.save(); closeModal(); refreshDetailsBtn(); toast(u?"บันทึกลิงก์แล้ว":"ลบลิงก์แล้ว"); };
+  const c=el("du_clear"); if(c) c.onclick=()=>{ P.detailsUrl=""; Store.save(); closeModal(); refreshDetailsBtn(); toast("ลบลิงก์แล้ว"); };
 }
 
 /* =====================  BARS — DRAG / RESIZE  ===================== */
